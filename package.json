@@ -5,6 +5,7 @@
   "main": "fetch-news.js",
   "scripts": {
     "start": "node fetch-news.js",
+    "crypto": "node crypto-monitor.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
