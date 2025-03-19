@@ -1,4 +1,5 @@
 const axios = require('axios');
+const Database = require('./database');
 
 const NEWS_API_KEY = process.env.NEWS_API_KEY || 'your-api-key-here';
 const BASE_URL = 'https://newsapi.org/v2';
@@ -12,8 +13,14 @@ const CRYPTO_KEYWORDS = [
     'exchange', 'trading', 'hodl', 'bull market', 'bear market'
 ];
 
-async function fetchCryptoNews() {
+async function fetchCryptoNews(saveToDb = false) {
+    const db = saveToDb ? new Database() : null;
+    
     try {
+        if (db) {
+            await db.init();
+        }
+        
         const today = new Date().toISOString().split('T')[0];
         const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         
@@ -37,9 +44,12 @@ async function fetchCryptoNews() {
         console.log(`=== 币圈新闻监控 (${today}) ===`);
         console.log(`总共找到 ${articles.length} 条相关新闻\n`);
         
+        let savedCount = 0;
+        
         // 按重要性和相关性排序显示前15条
-        articles.slice(0, 15).forEach((article, index) => {
-            console.log(`${index + 1}. ${article.title}`);
+        for (let i = 0; i < Math.min(15, articles.length); i++) {
+            const article = articles[i];
+            console.log(`${i + 1}. ${article.title}`);
             console.log(`   来源: ${article.source.name}`);
             console.log(`   时间: ${new Date(article.publishedAt).toLocaleString('zh-CN')}`);
             console.log(`   链接: ${article.url}`);
@@ -55,8 +65,26 @@ async function fetchCryptoNews() {
             if (matchedKeywords.length > 0) {
                 console.log(`   关键词: ${matchedKeywords.join(', ')}`);
             }
+            
+            // 保存到数据库
+            if (db) {
+                try {
+                    await db.saveNews(article, matchedKeywords);
+                    savedCount++;
+                    console.log(`   ✅ 已保存到数据库`);
+                } catch (saveError) {
+                    console.log(`   ⚠️ 保存失败: ${saveError.message}`);
+                }
+            }
+            
             console.log('');
-        });
+        }
+        
+        if (db) {
+            const totalCount = await db.getNewsCount();
+            console.log(`📊 数据库统计: 本次保存 ${savedCount} 条，总计 ${totalCount} 条新闻`);
+            await db.close();
+        }
         
     } catch (error) {
         console.error('获取币圈新闻失败:', error.message);
@@ -65,6 +93,10 @@ async function fetchCryptoNews() {
             console.log('\n请设置有效的 NEWS_API_KEY 环境变量。');
             console.log('获取API密钥: https://newsapi.org/register');
             console.log('使用方法: export NEWS_API_KEY=your-actual-api-key');
+        }
+        
+        if (db) {
+            await db.close();
         }
     }
 }
